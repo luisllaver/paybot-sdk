@@ -622,4 +622,81 @@ describe('PayBotClient', () => {
       expect(Number(signedPayload.validBefore)).toBeGreaterThan(0);
     });
   });
+
+  describe('createInvoice', () => {
+    it('should create a valid x402 invoice', () => {
+      const signingClient = new PayBotClient({
+        apiKey: 'pb_test_key',
+        botId: 'merchant-bot',
+        facilitatorUrl: 'https://api.test.com',
+        walletPrivateKey: '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
+      });
+
+      const invoice = signingClient.createInvoice({
+        amount: '5.00',
+        resource: 'https://api.example.com/premium-data',
+        network: 'eip155:8453',
+      });
+
+      expect(invoice.x402Version).toBe(1);
+      expect(invoice.accepts).toHaveLength(1);
+      expect(invoice.accepts[0].scheme).toBe('exact');
+      expect(invoice.accepts[0].network).toBe('eip155:8453');
+      expect(invoice.accepts[0].amount).toBe('5000000');
+      expect(invoice.accepts[0].payTo).toMatch(/^0x[a-fA-F0-9]{40}$/);
+      expect(invoice.facilitatorUrl).toBe('https://api.test.com');
+      expect(invoice.resource).toBe('https://api.example.com/premium-data');
+      expect(invoice.createdAt).toBeDefined();
+      expect(invoice.expiresAt).toBeDefined();
+      expect(new Date(invoice.expiresAt).getTime()).toBeGreaterThan(new Date(invoice.createdAt).getTime());
+    });
+
+    it('should throw without walletPrivateKey', () => {
+      expect(() => client.createInvoice({
+        amount: '1.00',
+        resource: 'test',
+      })).toThrow('walletPrivateKey');
+    });
+
+    it('should throw for unknown network', () => {
+      const signingClient = new PayBotClient({
+        apiKey: 'pb_test_key',
+        botId: 'bot',
+        walletPrivateKey: '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
+      });
+
+      expect(() => signingClient.createInvoice({
+        amount: '1.00',
+        resource: 'test',
+        network: 'eip155:99999',
+      })).toThrow('Unknown network');
+    });
+  });
+
+  describe('incomingPayments', () => {
+    it('should query incoming payments', async () => {
+      const mockPayments = [
+        {
+          txHash: '0xabc',
+          fromBotId: 'payer-bot',
+          amount: '1000000',
+          amountUsd: '1.00',
+          network: 'eip155:8453',
+          resource: 'https://api.example.com/data',
+          timestamp: '2026-03-13T10:00:00Z',
+        },
+      ];
+      mockFetch.mockResolvedValueOnce(jsonResponse(mockPayments));
+
+      const payments = await client.incomingPayments({ limit: 10 });
+
+      expect(payments).toHaveLength(1);
+      expect(payments[0].txHash).toBe('0xabc');
+      expect(payments[0].fromBotId).toBe('payer-bot');
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining('/incoming?botId=test-bot&limit=10'),
+        expect.any(Object)
+      );
+    });
+  });
 });

@@ -21,6 +21,18 @@ export type {
   CommissionSummary,
   CommissionLedgerFilter,
   CommissionEntry,
+  WalletBalanceResult,
+  InvoiceRequest,
+  Invoice,
+  IncomingPayment,
+  SubscriptionPlan,
+  SubscribeRequest,
+  SubscriptionResult,
+  SubscriptionStatus,
+  CancelSubscriptionResult,
+  AgentIdentity,
+  RegisterAgentRequest,
+  AgentLookupResult,
 } from './types.js';
 export type { NetworkConfig } from './networks.js';
 export {

@@ -15,6 +15,10 @@ import type {
   CommissionSummary,
   CommissionLedgerFilter,
   CommissionEntry,
+  WalletBalanceResult,
+  InvoiceRequest,
+  Invoice,
+  IncomingPayment,
 } from './types.js';
 import { getErrorMessage, PayBotApiError } from './errors.js';
 import { generateEIP3009Nonce } from './crypto.js';
@@ -415,6 +419,221 @@ export class PayBotClient {
     const whole = parts[0] ?? '0';
     const fraction = (parts[1] ?? '').padEnd(6, '0').slice(0, 6);
     return `${whole}${fraction}`.replace(/^0+/, '') || '0';
+  }
+
+  // --- Earning / receiving ---
+
+  /**
+   * Query the on-chain USDC balance for the bot's wallet.
+   * Requires walletPrivateKey to be set (to derive the address).
+   * Reads directly from the blockchain — no facilitator needed.
+   */
+  async walletBalance(network?: string): Promise<WalletBalanceResult> {
+    if (!this.config.walletPrivateKey) {
+      throw new Error('walletBalance requires walletPrivateKey to derive the wallet address');
+    }
+
+    const net = network ?? 'eip155:84532';
+    const networkConfig = NETWORKS[net];
+    if (!networkConfig) {
+      throw new Error(`Unknown network: ${net}`);
+    }
+
+    const { createPublicClient, http } = await import('viem');
+    const account = privateKeyToAccount(this.config.walletPrivateKey as `0x${string}`);
+
+    const client = createPublicClient({
+      transport: http(networkConfig.rpcUrl),
+    });
+
+    const balance = await client.readContract({
+      address: networkConfig.usdcAddress as `0x${string}`,
+      abi: [
+        {
+          name: 'balanceOf',
+          type: 'function',
+          stateMutability: 'view',
+          inputs: [{ name: 'account', type: 'address' }],
+          outputs: [{ name: '', type: 'uint256' }],
+        },
+      ] as const,
+      functionName: 'balanceOf',
+      args: [account.address],
+    });
+
+    const raw = balance.toString();
+    const usd = this.baseUnitsToUsd(raw);
+
+    return {
+      address: account.address,
+      balanceRaw: raw,
+      balanceUsd: usd,
+      network: net,
+    };
+  }
+
+  /**
+   * Create an x402-compatible invoice that other agents can pay.
+   * Returns a structured payment request object.
+   */
+  createInvoice(request: InvoiceRequest): Invoice {
+    if (!this.config.walletPrivateKey) {
+      throw new Error('createInvoice requires walletPrivateKey to derive the receiving address');
+    }
+
+    const account = privateKeyToAccount(this.config.walletPrivateKey as `0x${string}`);
+    const net = request.network ?? 'eip155:84532';
+    const networkConfig = NETWORKS[net];
+    if (!networkConfig) {
+      throw new Error(`Unknown network: ${net}`);
+    }
+
+    const amountBaseUnits = this.usdToBaseUnits(request.amount);
+    const expiresInSeconds = request.expiresIn ?? 3600;
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + expiresInSeconds * 1000);
+
+    return {
+      x402Version: 1,
+      accepts: [
+        {
+          scheme: 'exact',
+          network: net,
+          asset: `${net}/erc20:${networkConfig.usdcAddress}`,
+          amount: amountBaseUnits,
+          payTo: account.address,
+          maxTimeoutSeconds: expiresInSeconds,
+        },
+      ],
+      facilitatorUrl: this.config.facilitatorUrl,
+      resource: request.resource,
+      createdAt: now.toISOString(),
+      expiresAt: expiresAt.toISOString(),
+    };
+  }
+
+  /**
+   * Query incoming payments (payments received by this bot's wallet).
+   * Fetches from the facilitator server.
+   */
+  async incomingPayments(options?: { limit?: number; offset?: number }): Promise<IncomingPayment[]> {
+    const query: Record<string, string> = {
+      botId: this.config.botId,
+    };
+    if (options?.limit !== undefined) query.limit = String(options.limit);
+    if (options?.offset !== undefined) query.offset = String(options.offset);
+
+    return this._request<IncomingPayment[]>('/incoming', { query });
+  }
+
+  /**
+   * Convert base units (6 decimals) to human-readable USD string.
+   */
+  private baseUnitsToUsd(baseUnits: string): string {
+    const padded = baseUnits.padStart(7, '0');
+    const whole = padded.slice(0, padded.length - 6) || '0';
+    const fraction = padded.slice(padded.length - 6);
+    const trimmed = fraction.replace(/0+$/, '') || '0';
+    return trimmed === '0' ? `${whole}.00` : `${whole}.${fraction.slice(0, 2).padEnd(2, '0')}`;
+  }
+
+  // --- Agent Identity Registry ---
+
+  /**
+   * Register a rich agent identity in the Agent Identity Registry.
+   * Extends the basic /bots registration with name, description, capabilities, and metadata.
+   */
+  async registerIdentity(request: import('./types.js').RegisterAgentRequest): Promise<import('./types.js').AgentIdentity> {
+    return this._request<import('./types.js').AgentIdentity>('/agents', {
+      method: 'POST',
+      body: {
+        botId: this.config.botId,
+        ...request,
+      },
+    });
+  }
+
+  /**
+   * Look up an agent by ID in the Agent Identity Registry.
+   */
+  async lookupAgent(agentId: string): Promise<import('./types.js').AgentLookupResult> {
+    return this._request<import('./types.js').AgentLookupResult>(`/agents/${agentId}`);
+  }
+
+  /**
+   * Update the authenticated agent's identity profile.
+   */
+  async updateIdentity(updates: Partial<import('./types.js').RegisterAgentRequest>): Promise<import('./types.js').AgentIdentity> {
+    return this._request<import('./types.js').AgentIdentity>('/agents/me', {
+      method: 'PATCH',
+      body: {
+        botId: this.config.botId,
+        ...updates,
+      },
+    });
+  }
+
+  // --- Subscriptions (recurring payments) ---
+
+  /**
+   * Subscribe to a plan. Enables recurring USDC payments for agent services.
+   * The first payment is charged immediately; subsequent payments renew at nextPaymentAt.
+   */
+  async subscribe(request: import('./types.js').SubscribeRequest): Promise<import('./types.js').SubscriptionResult> {
+    try {
+      return await this._request<import('./types.js').SubscriptionResult>('/subscriptions', {
+        method: 'POST',
+        body: {
+          botId: request.botId ?? this.config.botId,
+          planId: request.planId,
+          network: request.network ?? 'eip155:8453',
+          autoRenew: request.autoRenew ?? true,
+        },
+      });
+    } catch (error: unknown) {
+      if (error instanceof PayBotApiError) {
+        return {
+          success: false,
+          subscriptionId: '',
+          planId: request.planId,
+          botId: request.botId ?? this.config.botId,
+          status: 'pending',
+          currentPeriodStart: '',
+          currentPeriodEnd: '',
+          nextPaymentAt: '',
+          amount: '0',
+          error: error.message,
+          errorCode: error.code,
+        };
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * List available subscription plans.
+   */
+  async listPlans(): Promise<import('./types.js').SubscriptionPlan[]> {
+    return this._request<import('./types.js').SubscriptionPlan[]>('/subscriptions/plans');
+  }
+
+  /**
+   * Get the current subscription status for this bot.
+   */
+  async subscriptionStatus(subscriptionId: string): Promise<import('./types.js').SubscriptionStatus> {
+    return this._request<import('./types.js').SubscriptionStatus>(`/subscriptions/${subscriptionId}`, {
+      query: { botId: this.config.botId },
+    });
+  }
+
+  /**
+   * Cancel a subscription. The agent keeps access until the current period ends.
+   */
+  async cancelSubscription(subscriptionId: string): Promise<import('./types.js').CancelSubscriptionResult> {
+    return this._request<import('./types.js').CancelSubscriptionResult>(`/subscriptions/${subscriptionId}`, {
+      method: 'DELETE',
+      body: { botId: this.config.botId },
+    });
   }
 
   // --- Commission queries ---

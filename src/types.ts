@@ -134,6 +134,178 @@ export interface ApiKeyListItem {
   lastUsedAt?: string;
 }
 
+// --- Earning / receiving types ---
+
+export interface WalletBalanceResult {
+  /** Wallet address queried */
+  address: string;
+  /** USDC balance in base units (6 decimals) */
+  balanceRaw: string;
+  /** USDC balance as human-readable string (e.g. "12.50") */
+  balanceUsd: string;
+  /** Network queried */
+  network: string;
+}
+
+export interface InvoiceRequest {
+  /** Human-readable amount in USD (e.g. "0.50") */
+  amount: string;
+  /** Description of what the payment is for */
+  resource: string;
+  /** Network CAIP-2 ID (default: eip155:84532) */
+  network?: string;
+  /** Invoice expiry in seconds from now (default: 3600) */
+  expiresIn?: number;
+}
+
+export interface Invoice {
+  /** x402 version */
+  x402Version: 1;
+  /** Payment requirements array */
+  accepts: Array<{
+    scheme: 'exact';
+    network: string;
+    asset: string;
+    amount: string;
+    payTo: string;
+    maxTimeoutSeconds: number;
+  }>;
+  /** Facilitator URL for verification */
+  facilitatorUrl: string;
+  /** Resource being sold */
+  resource: string;
+  /** Invoice creation timestamp (ISO 8601) */
+  createdAt: string;
+  /** Invoice expiry timestamp (ISO 8601) */
+  expiresAt: string;
+}
+
+export interface IncomingPayment {
+  /** Transaction hash */
+  txHash: string;
+  /** Payer bot ID */
+  fromBotId: string;
+  /** Amount received in base units */
+  amount: string;
+  /** Amount in human-readable USD */
+  amountUsd: string;
+  /** Network the payment was on */
+  network: string;
+  /** Resource that was paid for */
+  resource: string;
+  /** Payment timestamp */
+  timestamp: string;
+}
+
+// --- Subscription types ---
+
+export interface SubscriptionPlan {
+  /** Unique plan identifier */
+  planId: string;
+  /** Human-readable plan name */
+  name: string;
+  /** Monthly price in USDC (human-readable, e.g. "2.00") */
+  price: string;
+  /** Plan description */
+  description: string;
+  /** Features included in this plan */
+  features: string[];
+  /** Network CAIP-2 ID (default: eip155:8453) */
+  network?: string;
+  /** Whether the plan is currently available */
+  active: boolean;
+  /** Plan creation timestamp */
+  createdAt: string;
+}
+
+export interface SubscribeRequest {
+  /** Plan ID to subscribe to */
+  planId: string;
+  /** Subscriber bot ID (defaults to client botId) */
+  botId?: string;
+  /** Network CAIP-2 ID (default: eip155:8453) */
+  network?: string;
+  /** Payment method: auto-deduce from wallet or manual */
+  autoRenew?: boolean;
+}
+
+export interface SubscriptionResult {
+  success: boolean;
+  subscriptionId: string;
+  planId: string;
+  botId: string;
+  status: 'active' | 'pending' | 'cancelled' | 'expired';
+  currentPeriodStart: string;
+  currentPeriodEnd: string;
+  nextPaymentAt: string;
+  amount: string;
+  network?: string;
+  error?: string;
+  errorCode?: string;
+}
+
+export interface SubscriptionStatus {
+  subscriptionId: string;
+  planId: string;
+  planName: string;
+  status: 'active' | 'pending' | 'cancelled' | 'expired';
+  amount: string;
+  currentPeriodStart: string;
+  currentPeriodEnd: string;
+  nextPaymentAt: string;
+  cancelledAt?: string;
+}
+
+export interface CancelSubscriptionResult {
+  success: boolean;
+  subscriptionId: string;
+  status: 'cancelled';
+  cancelledAt: string;
+}
+
+// --- Agent Identity Registry types ---
+
+export interface AgentIdentity {
+  /** Agent unique identifier */
+  agentId: string;
+  /** Agent display name */
+  name: string;
+  /** Agent description */
+  description: string;
+  /** Agent wallet address (optional at registration) */
+  walletAddress?: string;
+  /** Agent capabilities */
+  capabilities?: string[];
+  /** Agent metadata (custom key-value pairs) */
+  metadata?: Record<string, string>;
+  /** Trust level */
+  trustLevel: number;
+  /** Whether the agent is verified */
+  verified: boolean;
+  /** Registration timestamp */
+  registeredAt: string;
+  /** Last update timestamp */
+  updatedAt: string;
+}
+
+export interface RegisterAgentRequest {
+  /** Agent display name */
+  name: string;
+  /** Agent description */
+  description: string;
+  /** Agent wallet address */
+  walletAddress?: string;
+  /** Agent capabilities */
+  capabilities?: string[];
+  /** Agent metadata */
+  metadata?: Record<string, string>;
+}
+
+export interface AgentLookupResult {
+  found: boolean;
+  agent?: AgentIdentity;
+}
+
 // --- Commission types ---
 
 export interface CommissionSummary {
