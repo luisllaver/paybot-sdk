@@ -9,15 +9,7 @@ Licensed Work:        paybot-sdk
                       The Licensed Work is (c) 2026 FriendlyAI /
                       Renata Baldissara-Kunnela.
 
-Additional Use Grant: You may make production use of the Licensed Work,
-                      provided such use does not include offering the
-                      Licensed Work to third parties on a hosted or embedded
-                      basis in order to compete with the Licensor's paid
-                      version(s) of the Licensed Work. For purposes of this
-                      license, providing the Licensed Work as a service
-                      that exposes substantially the same functionality
-                      offered by the Licensor's paid product(s), to third
-                      parties for a fee, constitutes a competing offering.
+Additional Use Grant: You may make production use of the Licensed Work, provided that you do not offer the Licensed Work to third parties as a hosted or embedded SDK or library product that competes with paybot-sdk distribution.
 
 Change Date:          2030-05-15
 
