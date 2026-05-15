@@ -42,7 +42,7 @@
     "bot-payments"
   ],
   "author": "RBKunnela",
-  "license": "MIT",
+  "license": "BUSL-1.1",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/RBKunnela/paybot-sdk.git"

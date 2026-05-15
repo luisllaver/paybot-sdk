@@ -189,4 +189,6 @@ const client = new PayBotClient({
 
 ## License
 
-[MIT](LICENSE)
+[Business Source License 1.1](LICENSE) (BUSL-1.1) — auto-converts to [MIT](https://opensource.org/licenses/MIT) on 2030-05-15.
+
+Non-production use is permitted without restriction. Production use is permitted **except** for offering the Licensed Work to third parties on a hosted or embedded basis that competes with the Licensor's paid version(s). For commercial licensing, contact the Licensor.
