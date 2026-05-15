@@ -191,4 +191,4 @@ const client = new PayBotClient({
 
 [Business Source License 1.1](LICENSE) (BUSL-1.1) — auto-converts to [MIT](https://opensource.org/licenses/MIT) on 2030-05-15.
 
-Non-production use is permitted without restriction. Production use is permitted **except** for offering the Licensed Work to third parties on a hosted or embedded basis that competes with the Licensor's paid version(s). For commercial licensing, contact the Licensor.
+Non-production use is permitted without restriction. Production use is permitted **except** for offering the Licensed Work to third parties on a hosted or embedded basis that competes with the Licensor's paid version(s), including services exposing substantially the same functionality to third parties for a fee. For commercial licensing, contact the Licensor.
