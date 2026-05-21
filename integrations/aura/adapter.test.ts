@@ -122,6 +122,20 @@ describe('network failure', () => {
   it('gate passes on unreachable when failOpen', async () => {
     const v = await beforeSettle('did:aura:trusted-bot', { failOpen: true, fetchImpl: failFetch });
     expect(v.verdict).toBe('unknown');
+    expect(v.reachable).toBe(false);
+  });
+
+  it('failOpen does NOT pass a reachable unknown (ghost DID)', async () => {
+    // A reachable AURA that returns `unknown` is still rejected even with
+    // failOpen — failOpen only excuses transport failures.
+    await expect(
+      beforeSettle('did:aura:ghost-bot', { failOpen: true, fetchImpl: okFetch }),
+    ).rejects.toBeInstanceOf(AuraUntrusted);
+  });
+
+  it('reachable verdict is marked reachable', async () => {
+    const v = await auraVerdict('did:aura:ghost-bot', { fetchImpl: okFetch });
+    expect(v.reachable).toBe(true);
   });
 });
 
