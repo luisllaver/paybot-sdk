@@ -40,6 +40,13 @@ export interface AuraVerdict {
   hasHistory: boolean;
   /** per-dimension breakdown (which axis is weak), or null */
   dimensions: Record<string, number> | null;
+  /**
+   * False only when AURA could not be reached (network/parse failure) and the
+   * verdict is a synthetic `unknown`. A reachable AURA that genuinely returns
+   * `unknown` has `reachable: true`. `failOpen` keys on this, not on the
+   * verdict alone, so it can't wave through explicitly-unverified counterparties.
+   */
+  reachable: boolean;
   /** the untouched JSON body */
   raw: Record<string, unknown>;
 }
@@ -85,12 +92,13 @@ function toVerdict(did: string, body: Record<string, unknown>): AuraVerdict {
     ok: verdict === 'trusted' || verdict === 'caution',
     hasHistory: Boolean(body.has_history),
     dimensions: (body.dimensions as Record<string, number> | null) ?? null,
+    reachable: true,
     raw: body,
   };
 }
 
 function unreachable(did: string, reason: string): AuraVerdict {
-  return { did, verdict: 'unknown', reason, score: null, ok: false, hasHistory: false, dimensions: null, raw: {} };
+  return { did, verdict: 'unknown', reason, score: null, ok: false, hasHistory: false, dimensions: null, reachable: false, raw: {} };
 }
 
 /**
@@ -140,14 +148,16 @@ export async function auraVerdict(did: string, opts: VerdictOptions = {}): Promi
  * Tighten to reject brand-new agents too:
  *     await beforeSettle(did, { allow: ['trusted', 'caution'] });
  *
- * failOpen: true makes an *unreachable* AURA pass through. Off by default —
- * absence of evidence is not evidence of trust.
+ * failOpen: true makes an *unreachable* AURA pass through (transport failure
+ * only — a reachable AURA that returns `unknown` is still rejected). Off by
+ * default — absence of evidence is not evidence of trust.
  */
 export async function beforeSettle(did: string, opts: GateOptions = {}): Promise<AuraVerdict> {
   const allow = opts.allow ?? DEFAULT_ALLOW;
   const v = await auraVerdict(did, opts);
   if (allow.includes(v.verdict)) return v;
-  if (opts.failOpen && v.verdict === 'unknown' && !v.hasHistory) return v;
+  // failOpen only excuses a transport failure, never a reachable `unknown`.
+  if (opts.failOpen && !v.reachable) return v;
   throw new AuraUntrusted(v);
 }
 
