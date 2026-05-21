@@ -15,10 +15,10 @@ natural `beforeSettle` gate in front of `client.pay()`.
 Gate the settlement at the call site. No global hooks, no monkey-patching:
 
 ```ts
-import { PayBotClient } from 'paybot-sdk';
+import { PayBotClient, type PaymentRequest } from 'paybot-sdk';
 import { beforeSettle, AuraUntrusted } from './integrations/aura';
 
-const client = new PayBotClient(config);
+const client = new PayBotClient(config);   // your existing PayBot config
 
 async function payChecked(counterpartyDid: string, req: PaymentRequest) {
   try {
@@ -49,8 +49,12 @@ console.log(v.verdict);  // trusted | caution | high_risk | new | unknown
 console.log(v.reason, v.score, v.ok);
 
 // v.dimensions tells you *which* axis is weak, not just the aggregate:
-if ((v.dimensions?.financial_integrity ?? 1) < 0.4) requireManualReview();
+if ((v.dimensions?.financial_integrity ?? 1) < 0.4) requireManualReview(); // placeholder for your own policy
 ```
+
+> `v.ok` reflects the *verdict class* (true for `trusted`/`caution`), not the
+> outcome of `beforeSettle` — the gate's default `allow` also lets `new`
+> through. Use the gate's return/throw for the decision, `v.ok` for display.
 
 ## Verdicts
 
